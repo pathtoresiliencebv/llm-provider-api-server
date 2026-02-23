@@ -18,9 +18,8 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.routers import script, enrich, tts, image, music, video
 
@@ -48,7 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include routers - NEW endpoints (without /api prefix)
 app.include_router(script.router, prefix="/script", tags=["Script"])
 app.include_router(enrich.router, prefix="/scenes", tags=["Scenes"])
 app.include_router(tts.router, prefix="/tts", tags=["TTS"])
@@ -77,7 +76,7 @@ async def root():
     </head>
     <body>
         <h1>AI Capability Server</h1>
-        <p>Stateless AI generation service. Input Output.</p>
+        <p>Stateless AI generation service. Input → Output.</p>
         
         <div class="endpoints">
             <h2>Available Endpoints</h2>
@@ -96,6 +95,96 @@ async def root():
     </body>
     </html>
     """
+
+
+# BACKWARDS COMPATIBLE ENDPOINTS (with /api prefix)
+# These redirect to the new endpoints for backward compatibility
+@app.get("/api")
+async def api_root():
+    """Redirect /api to /"""
+    return RedirectResponse(url="/")
+
+
+@app.get("/api/")
+async def api_root_slash():
+    """Redirect /api/ to /"""
+    return RedirectResponse(url="/")
+
+
+@app.post("/api/script")
+async def api_script(
+    topic: str,
+    tone: str = "neutral",
+    duration: int = 60,
+    audience: str = "general",
+    language: str = "English",
+):
+    """Backward compatible /api/script endpoint."""
+    return await script.generate_script(topic, tone, duration, audience, language)
+
+
+@app.post("/api/scenes/enrich")
+async def api_scenes_enrich(scenes: list):
+    """Backward compatible /api/scenes/enrich endpoint."""
+    return await enrich.enrich_scenes(scenes)
+
+
+@app.post("/api/tts")
+async def api_tts(
+    text: str,
+    voice: str = "radiant_girl",
+    model: str = "speech-2.8-hd",
+    speed: float = 1.0,
+    vol: float = 1.0,
+    pitch: int = 0,
+    output_format: str = "url",
+):
+    """Backward compatible /api/tts endpoint."""
+    return await tts.generate_tts(text, voice, model, speed, vol, pitch, output_format)
+
+
+@app.post("/api/image")
+async def api_image(
+    prompt: str,
+    model: str = "flux-pro",
+    style: str = "cinematic",
+    aspect_ratio: str = "16:9",
+    seed: int = None,
+):
+    """Backward compatible /api/image endpoint."""
+    return await image.generate_image(prompt, model, style, aspect_ratio, seed)
+
+
+@app.post("/api/music")
+async def api_music(
+    lyrics: str = None,
+    prompt: str = None,
+    model: str = "music-2.5",
+    duration: int = 30,
+    output_format: str = "url",
+):
+    """Backward compatible /api/music endpoint."""
+    return await music.generate_music(lyrics, prompt, model, duration, output_format)
+
+
+@app.post("/api/video")
+async def api_video(
+    prompt: str = None, image_url: str = None, model: str = "veo3", duration: int = 5
+):
+    """Backward compatible /api/video endpoint."""
+    return await video.generate_video(prompt, image_url, model, duration)
+
+
+@app.get("/api/voices")
+async def api_voices():
+    """Backward compatible /api/voices endpoint."""
+    return await tts.list_voices()
+
+
+@app.get("/api/models")
+async def api_models():
+    """Backward compatible /api/models endpoint."""
+    return await list_models()
 
 
 @app.get("/health")
