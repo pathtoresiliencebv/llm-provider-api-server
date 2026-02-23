@@ -15,11 +15,13 @@ Endpoints:
 """
 
 import os
+from typing import Optional, List, Any, Dict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from app.routers import script, enrich, tts, image, music, video
 
@@ -34,9 +36,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AI Capability Server",
-    description="Stateless AI generation service",
+    description="Stateless AI generation service - Input → Output",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 app.add_middleware(
@@ -98,7 +102,8 @@ async def root():
 
 
 # BACKWARDS COMPATIBLE ENDPOINTS (with /api prefix)
-# These redirect to the new endpoints for backward compatibility
+
+
 @app.get("/api")
 async def api_root():
     """Redirect /api to /"""
@@ -113,77 +118,176 @@ async def api_root_slash():
 
 @app.post("/api/script")
 async def api_script(
-    topic: str,
-    tone: str = "neutral",
-    duration: int = 60,
-    audience: str = "general",
-    language: str = "English",
+    topic: str = Body(..., description="Video topic"),
+    tone: str = Body(
+        default="neutral", description="Tone: neutral, inspiring, dramatic"
+    ),
+    duration: int = Body(default=60, description="Video duration in seconds"),
+    audience: str = Body(default="general", description="Target audience"),
+    language: str = Body(default="English", description="Language"),
 ):
-    """Backward compatible /api/script endpoint."""
+    """[BACKWARD COMPATIBLE] Generate a video script with scenes and visual direction.
+
+    Parameters:
+    - topic: Video topic (required)
+    - tone: neutral, inspiring, dramatic, etc. (default: neutral)
+    - duration: Video duration in seconds (default: 60)
+    - audience: Target audience (default: general)
+    - language: Language (default: English)
+    """
     return await script.generate_script(topic, tone, duration, audience, language)
 
 
 @app.post("/api/scenes/enrich")
-async def api_scenes_enrich(scenes: list):
-    """Backward compatible /api/scenes/enrich endpoint."""
+async def api_scenes_enrich(
+    scenes: List[Dict[str, Any]] = Body(
+        ...,
+        example=[
+            {
+                "text": "Scene text here",
+                "bgMusic": {"enabled": True, "mood": "upbeat", "genre": "pop"},
+            }
+        ],
+    ),
+):
+    """[BACKWARD COMPATIBLE] Enrich scenes with background music.
+
+    Request body format:
+    ```json
+    {
+      "scenes": [
+        {
+          "text": "Scene text here",
+          "bgMusic": {
+            "enabled": true,
+            "mood": "upbeat",
+            "genre": "pop"
+          }
+        }
+      ]
+    }
+    ```
+
+    Scene fields:
+    - text: Scene text/voiceover (required)
+    - bgMusic.enabled: Enable background music (default: true)
+    - bgMusic.mood: Music mood (upbeat, calm, dramatic, etc.)
+    - bgMusic.genre: Music genre (pop, rock, ambient, etc.)
+    - bgMusic.duration: Music duration in seconds
+    """
     return await enrich.enrich_scenes(scenes)
 
 
 @app.post("/api/tts")
 async def api_tts(
-    text: str,
-    voice: str = "radiant_girl",
-    model: str = "speech-2.8-hd",
-    speed: float = 1.0,
-    vol: float = 1.0,
-    pitch: int = 0,
-    output_format: str = "url",
+    text: str = Body(..., description="Text to speak"),
+    voice: str = Body(default="radiant_girl", description="Voice profile ID"),
+    model: str = Body(default="speech-2.8-hd", description="TTS model"),
+    speed: float = Body(default=1.0, description="Speech speed (0.5-2.0)"),
+    vol: float = Body(default=1.0, description="Volume (0.1-2.0)"),
+    pitch: int = Body(default=0, description="Pitch adjustment (-12 to 12)"),
+    output_format: str = Body(
+        default="url", description="Output format: url or base64"
+    ),
 ):
-    """Backward compatible /api/tts endpoint."""
+    """[BACKWARD COMPATIBLE] Text-to-Speech generation.
+
+    Parameters:
+    - text: Text to speak (required, max 10000 chars)
+    - voice: Voice profile (default: radiant_girl)
+      - Options: radiant_girl, narrator, magnetic_man, nl_kindhearted_girl
+      - Profiles: narrator_calm, narrator_female, podcast_male, podcast_female, energetic_male, energetic_female, calm_female, dutch_calm
+    - model: TTS model (default: speech-2.8-hd)
+      - Options: speech-2.8-hd, speech-2.8-turbo, speech-2.6-hd, speech-2.6-turbo
+    - speed: Speech speed 0.5-2.0 (default: 1.0)
+    - vol: Volume 0.1-2.0 (default: 1.0)
+    - pitch: Pitch -12 to 12 (default: 0)
+    - output_format: url or base64 (default: url)
+    """
     return await tts.generate_tts(text, voice, model, speed, vol, pitch, output_format)
 
 
 @app.post("/api/image")
 async def api_image(
-    prompt: str,
-    model: str = "flux-pro",
-    style: str = "cinematic",
-    aspect_ratio: str = "16:9",
-    seed: int = None,
+    prompt: str = Body(..., description="Image description"),
+    model: str = Body(default="flux-pro", description="Image model"),
+    style: str = Body(
+        default="cinematic", description="Style: cinematic, realistic, anime"
+    ),
+    aspect_ratio: str = Body(
+        default="16:9", description="Aspect ratio: 16:9, 1:1, 9:16"
+    ),
+    seed: int = Body(default=None, description="Random seed for reproducibility"),
 ):
-    """Backward compatible /api/image endpoint."""
+    """[BACKWARD COMPATIBLE] Image generation via FAL.ai.
+
+    Parameters:
+    - prompt: Image description (required)
+    - model: Image model (default: flux-pro)
+      - Options: flux-pro, flux-dev, flux-schnell, gpt-image-1, gpt-image-1.5, qwen-image, imagen-4
+    - style: Style (default: cinematic)
+    - aspect_ratio: 16:9, 1:1, 9:16 (default: 16:9)
+    - seed: Random seed (optional)
+    """
     return await image.generate_image(prompt, model, style, aspect_ratio, seed)
 
 
 @app.post("/api/music")
 async def api_music(
-    lyrics: str = None,
-    prompt: str = None,
-    model: str = "music-2.5",
-    duration: int = 30,
-    output_format: str = "url",
+    lyrics: str = Body(default=None, description="Song lyrics"),
+    prompt: str = Body(default=None, description="Music description/prompt"),
+    model: str = Body(default="music-2.5", description="Music model"),
+    duration: int = Body(default=30, description="Music duration in seconds"),
+    output_format: str = Body(
+        default="url", description="Output format: url or base64"
+    ),
 ):
-    """Backward compatible /api/music endpoint."""
+    """[BACKWARD COMPATIBLE] Music generation.
+
+    Parameters:
+    - lyrics: Song lyrics (optional, max 3500 chars)
+    - prompt: Music description (optional)
+    - model: Music model (default: music-2.5)
+      - Options: music-2.5, music-02, sonauto-v2
+    - duration: Duration in seconds (default: 30)
+    - output_format: url or base64 (default: url)
+    """
     return await music.generate_music(lyrics, prompt, model, duration, output_format)
 
 
 @app.post("/api/video")
 async def api_video(
-    prompt: str = None, image_url: str = None, model: str = "veo3", duration: int = 5
+    prompt: str = Body(
+        default=None, description="Video description (for text-to-video)"
+    ),
+    image_url: str = Body(
+        default=None, description="Input image URL (for image-to-video)"
+    ),
+    model: str = Body(default="veo3", description="Video model"),
+    duration: int = Body(default=5, description="Video duration in seconds"),
 ):
-    """Backward compatible /api/video endpoint."""
+    """[BACKWARD COMPATIBLE] Video generation.
+
+    Parameters:
+    - prompt: Video description (required for text-to-video)
+    - image_url: Input image URL (required for image-to-video)
+    - model: Video model (default: veo3)
+      - Text-to-Video: veo3, veo3-fast, kling-3.0-pro-t2v, kling-2.6-pro-t2v, sora-2, sora-2-pro, hailuo-02, ltx-video, hailuo-2.3
+      - Image-to-Video: veo3-i2v, kling-3.0-pro-i2v, kling-2.6-pro-i2v, hailuo-2.3-i2v, hailuo-2.3-fast
+    - duration: Duration in seconds (default: 5)
+    """
     return await video.generate_video(prompt, image_url, model, duration)
 
 
 @app.get("/api/voices")
 async def api_voices():
-    """Backward compatible /api/voices endpoint."""
+    """[BACKWARD COMPATIBLE] List available voices."""
     return await tts.list_voices()
 
 
 @app.get("/api/models")
 async def api_models():
-    """Backward compatible /api/models endpoint."""
+    """[BACKWARD COMPATIBLE] List all available models."""
     return await list_models()
 
 
