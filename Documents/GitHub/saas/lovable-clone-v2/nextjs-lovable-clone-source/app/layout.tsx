@@ -1,0 +1,101 @@
+/**
+ * app/layout.tsx
+ *
+ * Root layout for the entire application. This is the outermost wrapper
+ * that every page shares. It provides:
+ *
+ * 1. <Providers> — Combined client-side wrapper that includes:
+ *    - ThemeProvider (dark/light/system theme switching)
+ *    - ClerkProvider (auth context with theme-aware appearance)
+ * 2. Font loading — Geist Sans and Geist Mono from Google Fonts.
+ * 3. Global CSS — Tailwind v4 styles and custom properties.
+ * 4. HTML metadata — Page title and description for SEO.
+ * 5. Anti-flash script — Inline script prevents wrong theme on load.
+ *
+ * All three route groups ((marketing), (auth), (app)) render inside
+ * {children} here, inheriting the ClerkProvider and font setup.
+ *
+ * Used by: Next.js (automatic — wraps every page)
+ */
+
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import { Providers } from "@/components/providers";
+import { Toaster } from "@/components/ui/sonner";
+import "./globals.css";
+
+/**
+ * Geist Sans — Primary body font.
+ * Clean, modern sans-serif designed for readability on screens.
+ */
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+/**
+ * Geist Mono — Code and monospace font.
+ * Used in the code editor, chat code blocks, and terminal-style UI.
+ */
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+/**
+ * Page metadata for SEO and browser tabs.
+ * Individual pages can override these with their own metadata exports.
+ */
+export const metadata: Metadata = {
+  title: "Lovable Clone — AI-Powered Web App Builder",
+  description:
+    "Describe your app idea in plain English and get a working React application with live preview. Powered by Claude, GPT-4o, Gemini, and DeepSeek.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+  },
+};
+
+/**
+ * Inline script that runs before React hydration to prevent
+ * a flash of the wrong theme. Reads the stored theme from
+ * localStorage (or defaults to "dark") and applies the class
+ * to <html> immediately.
+ */
+const themeScript = `
+(function() {
+  try {
+    var t = localStorage.getItem('theme') || 'dark';
+    var d = t === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : t;
+    if (d === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  } catch(e) {
+    document.documentElement.classList.add('dark');
+  }
+})();
+`;
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
+      </body>
+    </html>
+  );
+}
